@@ -1,5 +1,6 @@
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
+import type { Alert } from '@/types';
 
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
@@ -45,16 +46,34 @@ export function formatDateKey(date: Date): string {
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
 }
 
-export function generateStatsForRange(days: number) {
+export function generateStatsForRange(days: number, realAlerts?: Alert[]) {
   const now = new Date();
   return Array.from({ length: days }, (_, i) => {
     const date = new Date(now.getTime() - 1000 * 60 * 60 * 24 * (days - 1 - i));
+    let level1 = 0;
+    let level2 = 0;
+    let level3 = 0;
+
+    if (realAlerts && realAlerts.length > 0) {
+      realAlerts.forEach((a) => {
+        if (isSameDay(a.alertTime, date)) {
+          if (a.level === 1) level1++;
+          else if (a.level === 2) level2++;
+          else level3++;
+        }
+      });
+    } else {
+      level1 = Math.floor(Math.random() * 5) + 1;
+      level2 = Math.floor(Math.random() * 8) + 2;
+      level3 = Math.floor(Math.random() * 6) + 1;
+    }
+
     return {
       date: `${date.getMonth() + 1}/${date.getDate()}`,
-      count: Math.floor(Math.random() * 15) + 5,
-      level1: Math.floor(Math.random() * 5) + 1,
-      level2: Math.floor(Math.random() * 8) + 2,
-      level3: Math.floor(Math.random() * 6) + 1,
+      count: level1 + level2 + level3,
+      level1,
+      level2,
+      level3,
     };
   });
 }

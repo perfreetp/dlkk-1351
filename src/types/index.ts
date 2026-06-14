@@ -68,9 +68,9 @@ export interface WorkOrder {
   contact: string;
   status: WorkOrderStatus;
   measures: {
-    check?: string;
-    announcement?: string;
-    intercept?: string;
+    check?: string | null;
+    announcement?: string | null;
+    intercept?: string | null;
   };
   result: string;
   createdAt: Date;

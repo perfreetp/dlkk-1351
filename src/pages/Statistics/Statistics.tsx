@@ -45,8 +45,8 @@ export default function Statistics() {
 
   const statisticsData = useMemo(() => {
     const days = timeRange === 'day' ? 1 : timeRange === 'week' ? 7 : 30;
-    return generateStatsForRange(days);
-  }, [timeRange]);
+    return generateStatsForRange(days, alerts);
+  }, [timeRange, alerts]);
 
   const filteredAlerts = useMemo(() => {
     const now = new Date();

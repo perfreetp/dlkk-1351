@@ -1,9 +1,10 @@
 import { NavLink } from 'react-router-dom';
-import { Radar, AlertTriangle, Crosshair, Shield, ClipboardList, Cpu, BarChart3 } from 'lucide-react';
+import { Radar, AlertTriangle, Crosshair, Shield, ClipboardList, Cpu, BarChart3, History } from 'lucide-react';
 
 const menuItems = [
   { path: '/dashboard', label: '态势大屏', icon: Radar },
   { path: '/alerts', label: '告警列表', icon: AlertTriangle },
+  { path: '/review', label: '值班复盘', icon: History },
   { path: '/fence', label: '电子围栏', icon: Shield },
   { path: '/workorders', label: '处置工单', icon: ClipboardList },
   { path: '/devices', label: '设备管理', icon: Cpu },

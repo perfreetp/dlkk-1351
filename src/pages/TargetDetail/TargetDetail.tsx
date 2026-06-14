@@ -38,25 +38,37 @@ export default function TargetDetail() {
 
   const interpolatedData = useMemo(() => {
     if (!target || trajectoryLength === 0) {
-      return { altitude: 0, speed: 0, direction: 0 };
+      return { altitude: 0, speed: 0, direction: 0, lat: 0, lng: 0 };
     }
-    if (trajectoryLength === 1) {
-      return { altitude: target.altitude, speed: target.speed, direction: target.direction };
-    }
-    const ratio = playbackIndex / (trajectoryLength - 1);
-    const startAlt = trajectory[0].altitude;
-    const endAlt = trajectory[trajectoryLength - 1].altitude;
-    const altitude = startAlt + (endAlt - startAlt) * ratio;
-    const speed = Math.max(1, target.speed + Math.sin(ratio * Math.PI * 4) * 1.5);
-    const direction = (target.direction + ratio * 45) % 360;
+    const idx = Math.min(playbackIndex, trajectoryLength - 1);
+    const point = trajectory[idx];
 
-    return { altitude, speed, direction };
+    let direction = target.direction;
+    let speed = target.speed;
+    if (idx > 0) {
+      const prevPoint = trajectory[idx - 1];
+      const dx = point.lng - prevPoint.lng;
+      const dy = point.lat - prevPoint.lat;
+      direction = Math.atan2(dx, dy) * (180 / Math.PI);
+      if (direction < 0) direction += 360;
+      const distMeters = Math.sqrt(dx * dx + dy * dy) * 111000;
+      const timeDiff = Math.max(1, (point.timestamp.getTime() - prevPoint.timestamp.getTime()) / 1000);
+      speed = Math.max(0.1, distMeters / timeDiff);
+    }
+
+    return {
+      altitude: point.altitude,
+      speed,
+      direction,
+      lat: point.lat,
+      lng: point.lng,
+    };
   }, [target, playbackIndex, trajectory, trajectoryLength]);
 
   const currentTimestamp = useMemo(() => {
-    if (!target) return new Date();
-    return new Date(target.firstSeen.getTime() + elapsedSeconds * 1000);
-  }, [target, elapsedSeconds]);
+    if (!currentPlaybackPoint) return target?.firstSeen || new Date();
+    return currentPlaybackPoint.timestamp;
+  }, [currentPlaybackPoint, target]);
 
   const playbackIndexMap = useMemo(() => {
     if (!target) return {};
@@ -64,8 +76,14 @@ export default function TargetDetail() {
   }, [target, playbackIndex]);
 
   const togglePlay = useCallback(() => {
+    setPlaybackIndex((prev) => {
+      if (prev >= trajectoryLength - 1) {
+        return 0;
+      }
+      return prev;
+    });
     setIsPlaying((prev) => !prev);
-  }, []);
+  }, [trajectoryLength]);
 
   const resetPlayback = useCallback(() => {
     setIsPlaying(false);
@@ -210,14 +228,18 @@ export default function TargetDetail() {
 
             <div className="absolute top-3 right-3 bg-bg-card/90 backdrop-blur border border-border-primary rounded-sm p-3">
               <div className="text-xs text-gray-400 mb-1">当前位置</div>
-              {currentPlaybackPoint && (
-                <div className="text-sm font-mono text-white">
-                  {currentPlaybackPoint.lat.toFixed(6)}, {currentPlaybackPoint.lng.toFixed(6)}
-                </div>
-              )}
+              <div className="text-sm font-mono text-white">
+                {interpolatedData.lat.toFixed(6)}, {interpolatedData.lng.toFixed(6)}
+              </div>
               <div className="text-xs text-primary font-mono mt-1">
                 {playbackIndex + 1} / {trajectoryLength} 个轨迹点
               </div>
+              {playbackIndex >= trajectoryLength - 1 && !isPlaying && trajectoryLength > 1 && (
+                <div className="text-xs text-alert-warning mt-2 flex items-center gap-1">
+                  <RotateCcw className="w-3 h-3" />
+                  播放结束，点击播放从头开始
+                </div>
+              )}
             </div>
           </div>
 
@@ -372,28 +394,26 @@ export default function TargetDetail() {
               <div className="bg-bg-tertiary p-3 rounded-sm">
                 <div className="text-xs text-gray-400 mb-1">播放时刻位置</div>
                 <div className="font-mono text-white">
-                  {currentPlaybackPoint
-                    ? `${currentPlaybackPoint.lat.toFixed(6)}, ${currentPlaybackPoint.lng.toFixed(6)}`
-                    : '--'}
+                  {interpolatedData.lat.toFixed(6)}, {interpolatedData.lng.toFixed(6)}
                 </div>
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div className="bg-bg-tertiary p-3 rounded-sm">
                   <div className="text-xs text-gray-400 mb-1">纬度</div>
                   <div className="font-mono text-white text-sm">
-                    {currentPlaybackPoint ? currentPlaybackPoint.lat.toFixed(6) : '--'}
+                    {interpolatedData.lat.toFixed(6)}
                   </div>
                 </div>
                 <div className="bg-bg-tertiary p-3 rounded-sm">
                   <div className="text-xs text-gray-400 mb-1">经度</div>
                   <div className="font-mono text-white text-sm">
-                    {currentPlaybackPoint ? currentPlaybackPoint.lng.toFixed(6) : '--'}
+                    {interpolatedData.lng.toFixed(6)}
                   </div>
                 </div>
                 <div className="bg-bg-tertiary p-3 rounded-sm col-span-2">
                   <div className="text-xs text-gray-400 mb-1">点高度</div>
                   <div className="font-mono text-white text-sm">
-                    {currentPlaybackPoint ? `${currentPlaybackPoint.altitude.toFixed(2)} m` : '--'}
+                    {interpolatedData.altitude.toFixed(2)} m
                   </div>
                 </div>
               </div>

@@ -1,6 +1,6 @@
-import { useState, useMemo } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { AlertTriangle, Filter, Check, XCircle, ArrowUpRight, Search, Calendar, MapPin, Clock, Shield, Target, ClipboardList, Plus, FileText } from 'lucide-react';
+import { useState, useMemo, useEffect } from 'react';
+import { useNavigate, useSearchParams } from 'react-router-dom';
+import { AlertTriangle, Filter, Check, XCircle, ArrowUpRight, Search, Calendar, MapPin, Clock, Shield, Target, ClipboardList, Plus, FileText, History } from 'lucide-react';
 import { useAppStore } from '@/store';
 import type { AlertLevel, AlertStatus } from '@/types';
 import { alertStatusLabels, fenceTypeLabels } from '@/data/mockData';
@@ -8,6 +8,8 @@ import { isSameDay } from '@/lib/utils';
 
 export default function Alerts() {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const expandParam = searchParams.get('expand');
   const { alerts, devices, fences, targets, workOrders, updateAlertStatus } = useAppStore();
   const [selectedLevel, setSelectedLevel] = useState<AlertLevel | 'all'>('all');
   const [selectedStatus, setSelectedStatus] = useState<AlertStatus | 'all'>('all');
@@ -15,6 +17,12 @@ export default function Alerts() {
   const [dateRange, setDateRange] = useState('');
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [expandedRow, setExpandedRow] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (expandParam) {
+      setExpandedRow(expandParam);
+    }
+  }, [expandParam]);
 
   const filteredAlerts = useMemo(() => {
     return alerts.filter((alert) => {
@@ -142,6 +150,13 @@ export default function Alerts() {
               <span className="text-alert-success font-mono font-bold">{stats.resolved}</span>
             </div>
           </div>
+          <button
+            onClick={() => navigate('/review')}
+            className="btn-primary flex items-center gap-2 text-sm"
+          >
+            <History className="w-4 h-4" />
+            值班复盘
+          </button>
         </div>
       </div>
 
@@ -506,7 +521,7 @@ export default function Alerts() {
                                 {alertWorkOrders.map((wo) => (
                                   <div
                                     key={wo.id}
-                                    onClick={() => navigate(`/workorders`)}
+                                    onClick={() => navigate(`/workorders?expandWo=${wo.id}`)}
                                     className="p-2 bg-bg-tertiary rounded-sm cursor-pointer hover:bg-bg-card transition-colors"
                                   >
                                     <div className="flex items-center justify-between mb-1">

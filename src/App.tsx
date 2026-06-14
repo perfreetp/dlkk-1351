@@ -7,6 +7,7 @@ import Fence from '@/pages/Fence/Fence';
 import WorkOrders from '@/pages/WorkOrders/WorkOrders';
 import Devices from '@/pages/Devices/Devices';
 import Statistics from '@/pages/Statistics/Statistics';
+import Review from '@/pages/Review/Review';
 
 export default function App() {
   return (
@@ -21,6 +22,7 @@ export default function App() {
           <Route path="workorders" element={<WorkOrders />} />
           <Route path="devices" element={<Devices />} />
           <Route path="statistics" element={<Statistics />} />
+          <Route path="review" element={<Review />} />
         </Route>
       </Routes>
     </Router>

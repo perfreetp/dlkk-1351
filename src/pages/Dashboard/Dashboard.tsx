@@ -34,7 +34,7 @@ export default function Dashboard() {
   };
 
   const handleViewAlert = (alert: Alert) => {
-    navigate(`/alerts`);
+    navigate(`/alerts?expand=${alert.id}`);
   };
 
   const toggleFullscreen = () => {
