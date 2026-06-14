@@ -15,10 +15,18 @@ import {
   ChevronUp,
   FileText,
   Cpu,
+  Filter,
+  ChevronLeft,
+  ChevronRight,
+  Download,
+  CalendarDays,
+  Gauge,
+  CheckCircle2,
 } from 'lucide-react';
 import { useAppStore } from '@/store';
 import type { Alert, WorkOrder } from '@/types';
 import { alertStatusLabels, fenceTypeLabels } from '@/data/mockData';
+import { isSameDay, toDateInputValue } from '@/lib/utils';
 
 interface TimelineEvent {
   id: string;
@@ -36,6 +44,45 @@ export default function Review() {
   const { alerts, targets, fences, devices, workOrders } = useAppStore();
   const [selectedAlertId, setSelectedAlertId] = useState<string | null>(alerts[0]?.id || null);
   const [expanded, setExpanded] = useState(true);
+  const [filterDate, setFilterDate] = useState<string>('');
+  const [filterLevel, setFilterLevel] = useState<'' | '1' | '2' | '3'>('');
+  const [filterResult, setFilterResult] = useState<'' | 'pending' | 'active' | 'resolved' | 'false_positive'>('');
+  const [exportingReport, setExportingReport] = useState(false);
+
+  const sortedFilteredAlerts = useMemo(() => {
+    let list = [...alerts].sort((a, b) => b.alertTime.getTime() - a.alertTime.getTime());
+    if (filterDate) {
+      const fd = new Date(filterDate);
+      list = list.filter((a) => isSameDay(a.alertTime, fd));
+    }
+    if (filterLevel) {
+      list = list.filter((a) => a.level === Number(filterLevel));
+    }
+    if (filterResult) {
+      list = list.filter((a) => {
+        if (filterResult === 'pending') return a.status === 'pending';
+        if (filterResult === 'active') return a.status === 'confirmed' || a.status === 'escalated';
+        if (filterResult === 'resolved') return a.status === 'resolved';
+        if (filterResult === 'false_positive') return a.status === 'false_positive';
+        return true;
+      });
+    }
+    return list;
+  }, [alerts, filterDate, filterLevel, filterResult]);
+
+  const currentIndex = useMemo(() => {
+    if (!selectedAlertId) return -1;
+    return sortedFilteredAlerts.findIndex((a) => a.id === selectedAlertId);
+  }, [sortedFilteredAlerts, selectedAlertId]);
+
+  const goPrev = () => {
+    if (currentIndex > 0) setSelectedAlertId(sortedFilteredAlerts[currentIndex - 1].id);
+  };
+  const goNext = () => {
+    if (currentIndex >= 0 && currentIndex < sortedFilteredAlerts.length - 1) {
+      setSelectedAlertId(sortedFilteredAlerts[currentIndex + 1].id);
+    }
+  };
 
   const selectedAlert = useMemo(() => {
     return alerts.find((a) => a.id === selectedAlertId) || null;
@@ -231,9 +278,94 @@ export default function Review() {
     return `${mins}分${secs}秒`;
   };
 
+  const exportReviewReport = () => {
+    if (!selectedAlert) return;
+    setExportingReport(true);
+    setTimeout(() => {
+      const now = new Date();
+      const reportDate = now.toLocaleDateString('zh-CN');
+      const reportTime = now.toLocaleTimeString('zh-CN');
+      const finalResult =
+        selectedAlert.status === 'resolved' ? '已解决（目标已驱离）' :
+        selectedAlert.status === 'false_positive' ? '误报（已排除）' :
+        selectedAlert.status === 'escalated' ? '处置中（已升级）' :
+        selectedAlert.status === 'confirmed' ? '处置中（已确认）' :
+        '待确认';
+
+      const content = `
+无人机黑飞检测系统 - 事件复盘报告
+=====================================
+生成时间: ${reportDate} ${reportTime}
+
+一、告警背景信息
+-------------------------------------
+告警编号: ${selectedAlert.id}
+告警等级: ${selectedAlert.level} 级
+告警时间: ${selectedAlert.alertTime.toLocaleString('zh-CN')}
+告警描述: ${selectedAlert.description}
+发生位置: ${selectedAlert.position.lat.toFixed(6)}, ${selectedAlert.position.lng.toFixed(6)}
+当前状态: ${alertStatusLabels[selectedAlert.status]}
+
+目标信息:
+  目标编号: ${relatedTarget?.id || '无'}
+  目标类型: ${relatedTarget?.type || '未知'}
+  出现时间: ${relatedTarget?.firstSeen.toLocaleString('zh-CN') || '-'}
+  高度/速度: ${relatedTarget ? `H:${relatedTarget.altitude.toFixed(0)}m, V:${relatedTarget.speed.toFixed(1)}m/s` : '-'}
+
+触发围栏:
+  围栏名称: ${relatedFence?.name || '无'}
+  围栏类型: ${relatedFence ? fenceTypeLabels[relatedFence.type] : '-'}
+  限高标准: ${relatedFence?.maxHeight ?? '-'} m
+
+探测设备:
+  设备编号: ${relatedDevice?.id || '无'}
+  设备名称: ${relatedDevice?.name || '-'}
+  设备状态: ${relatedDevice?.status || '-'}
+
+二、处置时间线
+-------------------------------------
+总耗时: ${getTotalDuration()}   事件数: ${timeline.length}
+${timeline.map((e, i) => `${String(i + 1).padStart(2, '0')}. [${e.time.toLocaleString('zh-CN')}] ${e.title}${e.description ? `\\n    ${e.description.replace(/\\n/g, '\\n    ')}` : ''}`).join('\\n\\n')}
+
+三、关联工单 (${relatedOrders.length})
+-------------------------------------
+${relatedOrders.length > 0 ? relatedOrders.map((o, i) => `
+工单${i + 1}: ${o.id}
+  状态: ${o.status === 'pending' ? '待处置' : o.status === 'processing' ? '处置中' : o.status === 'completed' ? '已完成' : '已关闭'}
+  处置人: ${o.handler} (${o.contact})
+  创建时间: ${o.createdAt.toLocaleString('zh-CN')}
+  现场核查: ${o.measures.check || '未填写'}
+  喊话驱离: ${o.measures.announcement || '未填写'}
+  拦截处置: ${o.measures.intercept || '未填写'}
+  处置结果: ${o.result || '未填写'}
+  ${o.closedAt ? `完成时间: ${o.closedAt.toLocaleString('zh-CN')}` : ''}
+`.trim()).join('\\n\\n') : '  （未关联工单）'}
+
+四、最终结果
+-------------------------------------
+处置结论: ${finalResult}
+状态说明: 处置状态为"${alertStatusLabels[selectedAlert.status]}"，已建工单 ${relatedOrders.length} 张
+
+=====================================
+报告生成完毕 - 可用于交接班、培训和留档
+      `.trim();
+
+      const blob = new Blob([content], { type: 'text/plain;charset=utf-8' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `事件复盘_${selectedAlert.id}_${toDateInputValue(now)}.txt`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+      setExportingReport(false);
+    }, 500);
+  };
+
   return (
     <div className="flex flex-col h-full overflow-hidden">
-      <div className="h-14 bg-bg-secondary border-b border-border-primary flex items-center justify-between px-6">
+      <div className="h-14 bg-bg-secondary border-b border-border-primary flex items-center justify-between px-6 shrink-0">
         <div className="flex items-center gap-4">
           <button
             onClick={() => navigate('/alerts')}
@@ -246,30 +378,130 @@ export default function Review() {
             值班复盘
           </h2>
           <span className="text-sm text-gray-400">告警处置全流程时间线</span>
+          <span className="badge badge-info">
+            共 {sortedFilteredAlerts.length} 条
+          </span>
         </div>
         {selectedAlert && (
-          <div className="flex items-center gap-3 text-sm">
+          <div className="flex items-center gap-3">
+            <div className="flex items-center gap-1 border border-border-primary rounded-sm overflow-hidden">
+              <button
+                onClick={goPrev}
+                disabled={currentIndex <= 0}
+                className="px-2 py-1.5 text-sm text-gray-400 hover:text-white hover:bg-bg-tertiary disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+              >
+                <ChevronLeft className="w-4 h-4" />
+              </button>
+              <span className="px-2 text-xs text-gray-400 font-mono min-w-[60px] text-center">
+                {currentIndex >= 0 ? `${currentIndex + 1}/${sortedFilteredAlerts.length}` : '-/-'}
+              </span>
+              <button
+                onClick={goNext}
+                disabled={currentIndex < 0 || currentIndex >= sortedFilteredAlerts.length - 1}
+                className="px-2 py-1.5 text-sm text-gray-400 hover:text-white hover:bg-bg-tertiary disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+              >
+                <ChevronRight className="w-4 h-4" />
+              </button>
+            </div>
+            <button
+              onClick={exportReviewReport}
+              disabled={exportingReport}
+              className="btn-primary flex items-center gap-2"
+            >
+              {exportingReport ? (
+                <>
+                  <div className="w-4 h-4 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+                  导出中...
+                </>
+              ) : (
+                <>
+                  <Download className="w-4 h-4" />
+                  导出复盘报告
+                </>
+              )}
+            </button>
             <span className={`badge badge-level-${selectedAlert.level}`}>
               等级 {selectedAlert.level}
             </span>
-            <span className="text-gray-400">总耗时:</span>
-            <span className="font-mono text-primary">{getTotalDuration()}</span>
-            <span className="text-gray-400">事件数:</span>
-            <span className="font-mono text-white">{timeline.length}</span>
+            <span className="text-gray-400 text-sm">总耗时:</span>
+            <span className="font-mono text-primary text-sm">{getTotalDuration()}</span>
+            <span className="text-gray-400 text-sm">事件数:</span>
+            <span className="font-mono text-white text-sm">{timeline.length}</span>
           </div>
         )}
       </div>
 
       <div className="flex-1 flex overflow-hidden">
-        <div className="w-80 border-r border-border-primary bg-bg-secondary/50 flex flex-col">
-          <div className="p-3 border-b border-border-primary">
-            <h3 className="text-sm font-semibold text-primary">告警记录</h3>
-            <p className="text-xs text-gray-500 mt-1">选择一条告警查看处置时间线</p>
+        <div className="w-80 border-r border-border-primary bg-bg-secondary/50 flex flex-col shrink-0">
+          <div className="p-3 border-b border-border-primary space-y-3">
+            <div className="flex items-center gap-2">
+              <Filter className="w-4 h-4 text-primary" />
+              <h3 className="text-sm font-semibold text-primary">告警筛选</h3>
+            </div>
+            <div className="space-y-2">
+              <div className="flex items-center gap-2">
+                <CalendarDays className="w-3.5 h-3.5 text-gray-400" />
+                <input
+                  type="date"
+                  value={filterDate}
+                  onChange={(e) => setFilterDate(e.target.value)}
+                  placeholder="选择日期"
+                  className="flex-1 bg-bg-tertiary border border-border-primary rounded-sm px-2 py-1 text-xs text-white outline-none focus:border-primary"
+                />
+                {filterDate && (
+                  <button
+                    onClick={() => setFilterDate('')}
+                    className="text-[10px] text-gray-400 hover:text-white px-1"
+                    title="清除"
+                  >
+                    ×
+                  </button>
+                )}
+              </div>
+              <div className="flex items-center gap-2">
+                <Gauge className="w-3.5 h-3.5 text-gray-400" />
+                <select
+                  value={filterLevel}
+                  onChange={(e) => setFilterLevel(e.target.value as any)}
+                  className="flex-1 bg-bg-tertiary border border-border-primary rounded-sm px-2 py-1 text-xs text-white outline-none focus:border-primary"
+                >
+                  <option value="">全部等级</option>
+                  <option value="1">一级告警</option>
+                  <option value="2">二级告警</option>
+                  <option value="3">三级告警</option>
+                </select>
+              </div>
+              <div className="flex items-center gap-2">
+                <CheckCircle2 className="w-3.5 h-3.5 text-gray-400" />
+                <select
+                  value={filterResult}
+                  onChange={(e) => setFilterResult(e.target.value as any)}
+                  className="flex-1 bg-bg-tertiary border border-border-primary rounded-sm px-2 py-1 text-xs text-white outline-none focus:border-primary"
+                >
+                  <option value="">全部结果</option>
+                  <option value="pending">待确认</option>
+                  <option value="active">处置中</option>
+                  <option value="resolved">已解决</option>
+                  <option value="false_positive">误报</option>
+                </select>
+              </div>
+              {(filterDate || filterLevel || filterResult) && (
+                <button
+                  onClick={() => { setFilterDate(''); setFilterLevel(''); setFilterResult(''); }}
+                  className="w-full text-[11px] text-primary hover:underline text-right"
+                >
+                  清除全部筛选
+                </button>
+              )}
+            </div>
+          </div>
+          <div className="px-3 py-2 border-b border-border-primary bg-bg-secondary/50 flex items-center justify-between">
+            <span className="text-xs text-gray-400">告警记录</span>
+            <span className="text-[10px] text-gray-500">按时间倒序</span>
           </div>
           <div className="flex-1 overflow-y-auto scrollbar-thin p-2 space-y-2">
-            {[...alerts]
-              .sort((a, b) => b.alertTime.getTime() - a.alertTime.getTime())
-              .map((alert) => (
+            {sortedFilteredAlerts.length > 0 ? (
+              sortedFilteredAlerts.map((alert) => (
                 <div
                   key={alert.id}
                   onClick={() => setSelectedAlertId(alert.id)}
@@ -304,7 +536,19 @@ export default function Review() {
                     </span>
                   </div>
                 </div>
-              ))}
+              ))
+            ) : (
+              <div className="flex flex-col items-center justify-center py-16 text-gray-500">
+                <Filter className="w-10 h-10 mb-2 opacity-30" />
+                <p className="text-xs">筛选条件下无告警</p>
+                <button
+                  onClick={() => { setFilterDate(''); setFilterLevel(''); setFilterResult(''); }}
+                  className="text-[11px] text-primary hover:underline mt-2"
+                >
+                  清除筛选
+                </button>
+              </div>
+            )}
           </div>
         </div>
 
