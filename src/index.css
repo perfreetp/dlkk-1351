@@ -1,0 +1,176 @@
+@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=Noto+Sans+SC:wght@300;400;500;600;700&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  font-family: 'Noto Sans SC', sans-serif;
+  line-height: 1.5;
+  font-weight: 400;
+  color: #e0e8f0;
+  background-color: #0a1628;
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  padding: 0;
+  min-height: 100vh;
+  background: #0a1628;
+  overflow-x: hidden;
+}
+
+#root {
+  min-height: 100vh;
+}
+
+@layer components {
+  .btn-primary {
+    @apply px-4 py-2 bg-transparent border border-primary/50 text-primary rounded-sm
+           hover:bg-primary/10 hover:border-primary hover:shadow-glow-primary
+           transition-all duration-300 text-sm font-medium;
+  }
+
+  .btn-danger {
+    @apply px-4 py-2 bg-transparent border border-alert-danger/50 text-alert-danger rounded-sm
+           hover:bg-alert-danger/10 hover:border-alert-danger hover:shadow-glow-danger
+           transition-all duration-300 text-sm font-medium;
+  }
+
+  .btn-success {
+    @apply px-4 py-2 bg-transparent border border-alert-success/50 text-alert-success rounded-sm
+           hover:bg-alert-success/10 hover:border-alert-success hover:shadow-glow-success
+           transition-all duration-300 text-sm font-medium;
+  }
+
+  .btn-warning {
+    @apply px-4 py-2 bg-transparent border border-alert-warning/50 text-alert-warning rounded-sm
+           hover:bg-alert-warning/10 hover:border-alert-warning hover:shadow-glow-warning
+           transition-all duration-300 text-sm font-medium;
+  }
+
+  .card {
+    @apply bg-bg-card border border-border-primary rounded-sm relative overflow-hidden;
+  }
+
+  .card::before {
+    content: '';
+    @apply absolute top-0 left-0 w-4 h-4 border-l-2 border-t-2 border-primary;
+  }
+
+  .card::after {
+    content: '';
+    @apply absolute bottom-0 right-0 w-4 h-4 border-r-2 border-b-2 border-primary;
+  }
+
+  .card-header {
+    @apply px-4 py-3 border-b border-border-primary flex items-center justify-between;
+  }
+
+  .card-title {
+    @apply text-primary font-semibold text-sm tracking-wide;
+  }
+
+  .input-field {
+    @apply w-full px-3 py-2 bg-bg-secondary border border-border-primary rounded-sm
+           text-white placeholder:text-gray-500 focus:outline-none focus:border-primary
+           focus:shadow-glow-primary transition-all duration-300 text-sm;
+  }
+
+  .table-row {
+    @apply border-b border-border-secondary hover:bg-primary/5 transition-colors;
+  }
+
+  .table-header {
+    @apply px-4 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider
+           border-b border-border-primary bg-bg-secondary/50;
+  }
+
+  .badge {
+    @apply inline-flex items-center px-2 py-0.5 rounded text-xs font-medium;
+  }
+
+  .badge-level-1 {
+    @apply bg-alert-1/20 text-alert-1 border border-alert-1/50;
+  }
+
+  .badge-level-2 {
+    @apply bg-alert-2/20 text-alert-2 border border-alert-2/50;
+  }
+
+  .badge-level-3 {
+    @apply bg-alert-3/20 text-alert-3 border border-alert-3/50;
+  }
+
+  .badge-success {
+    @apply bg-alert-success/20 text-alert-success border border-alert-success/50;
+  }
+
+  .badge-info {
+    @apply bg-primary/20 text-primary border border-primary/50;
+  }
+
+  .status-dot {
+    @apply w-2 h-2 rounded-full;
+  }
+
+  .status-online {
+    @apply bg-alert-success animate-pulse;
+  }
+
+  .status-offline {
+    @apply bg-gray-500;
+  }
+
+  .status-fault {
+    @apply bg-alert-1 animate-pulse;
+  }
+
+  .grid-bg {
+    background-image:
+      linear-gradient(rgba(0, 212, 255, 0.03) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(0, 212, 255, 0.03) 1px, transparent 1px);
+    background-size: 40px 40px;
+  }
+
+  .glow-text {
+    text-shadow: 0 0 10px currentColor;
+  }
+
+  .scan-line::after {
+    content: '';
+    @apply absolute inset-0 bg-gradient-to-b from-transparent via-primary/5 to-transparent;
+    animation: scan 3s linear infinite;
+    pointer-events: none;
+  }
+
+  .animate-number {
+    @apply font-mono tabular-nums;
+  }
+
+  .scrollbar-thin::-webkit-scrollbar {
+    width: 4px;
+    height: 4px;
+  }
+
+  .scrollbar-thin::-webkit-scrollbar-track {
+    background: rgba(0, 212, 255, 0.05);
+  }
+
+  .scrollbar-thin::-webkit-scrollbar-thumb {
+    background: rgba(0, 212, 255, 0.3);
+    border-radius: 2px;
+  }
+
+  .scrollbar-thin::-webkit-scrollbar-thumb:hover {
+    background: rgba(0, 212, 255, 0.5);
+  }
+}
