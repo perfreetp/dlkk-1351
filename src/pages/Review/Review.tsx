@@ -267,7 +267,7 @@ export default function Review() {
             <p className="text-xs text-gray-500 mt-1">选择一条告警查看处置时间线</p>
           </div>
           <div className="flex-1 overflow-y-auto scrollbar-thin p-2 space-y-2">
-            {alerts
+            {[...alerts]
               .sort((a, b) => b.alertTime.getTime() - a.alertTime.getTime())
               .map((alert) => (
                 <div

@@ -28,9 +28,6 @@ import {
   MapPin,
 } from 'lucide-react';
 import {
-  mockAreaStats,
-  mockTypeStats,
-  mockTimeSlotStats,
   alertStatusLabels,
 } from '@/data/mockData';
 import { useAppStore } from '@/store';
@@ -39,7 +36,7 @@ import { generateStatsForRange, isSameDay } from '@/lib/utils';
 type TimeRange = 'day' | 'week' | 'month';
 
 export default function Statistics() {
-  const { alerts, workOrders } = useAppStore();
+  const { alerts, workOrders, targets, fences } = useAppStore();
   const [timeRange, setTimeRange] = useState<TimeRange>('week');
   const [exporting, setExporting] = useState(false);
 
@@ -102,6 +99,45 @@ export default function Statistics() {
     return { total, pending, processing, completed, closed };
   }, [filteredWorkOrders]);
 
+  const areaStats = useMemo(() => {
+    const countMap: Record<string, number> = {};
+    filteredAlerts.forEach((a) => {
+      const fence = fences.find((f) => f.id === a.fenceId);
+      const name = fence ? fence.name : '未归属区域';
+      countMap[name] = (countMap[name] || 0) + 1;
+    });
+    const colors = ['#ff3d3d', '#ff8a00', '#ffc700', '#00d4ff', '#00ff88', '#a855f7', '#ec4899'];
+    const entries = Object.entries(countMap).sort((a, b) => b[1] - a[1]);
+    return entries.map(([name, count], i) => ({
+      name,
+      count,
+      color: colors[i % colors.length],
+    }));
+  }, [filteredAlerts, fences]);
+
+  const typeStats = useMemo(() => {
+    const countMap: Record<string, number> = {};
+    filteredAlerts.forEach((a) => {
+      const target = targets.find((t) => t.id === a.targetId);
+      const type = target ? target.type : '未知类型';
+      countMap[type] = (countMap[type] || 0) + 1;
+    });
+    return Object.entries(countMap)
+      .map(([type, count]) => ({ type, count }))
+      .sort((a, b) => b.count - a.count);
+  }, [filteredAlerts, targets]);
+
+  const timeSlotStats = useMemo(() => {
+    const slots = ['00:00-06:00', '06:00-12:00', '12:00-18:00', '18:00-24:00'];
+    const counts = [0, 0, 0, 0];
+    filteredAlerts.forEach((a) => {
+      const hour = a.alertTime.getHours();
+      const idx = hour < 6 ? 0 : hour < 12 ? 1 : hour < 18 ? 2 : 3;
+      counts[idx]++;
+    });
+    return slots.map((slot, i) => ({ slot, count: counts[i] }));
+  }, [filteredAlerts]);
+
   const handleExportReport = () => {
     setExporting(true);
 
@@ -140,15 +176,15 @@ export default function Statistics() {
 
 三、区域分布
 -------------------------------------
-${mockAreaStats.map((a) => `${a.name}: ${a.count}次`).join('\n')}
+${areaStats.length > 0 ? areaStats.map((a) => `${a.name}: ${a.count}次`).join('\n') : '  （周期内无数据）'}
 
 四、目标类型分布
 -------------------------------------
-${mockTypeStats.map((t) => `${t.type}: ${t.count}次`).join('\n')}
+${typeStats.length > 0 ? typeStats.map((t) => `${t.type}: ${t.count}次`).join('\n') : '  （周期内无数据）'}
 
 五、时段分布
 -------------------------------------
-${mockTimeSlotStats.map((t) => `${t.slot}: ${t.count}次`).join('\n')}
+${timeSlotStats.map((t) => `${t.slot}: ${t.count}次`).join('\n')}
 
 六、告警趋势 (${rangeLabel})
 -------------------------------------
@@ -188,11 +224,11 @@ ${statisticsData.map((d) => `${d.date}: 总计${d.count}次 (一级${d.level1} �
     return null;
   };
 
-  const pieData = mockAreaStats.map((a) => ({
+  const pieData = areaStats.length > 0 ? areaStats.map((a) => ({
     name: a.name,
     value: a.count,
     color: a.color,
-  }));
+  })) : [{ name: '暂无数据', value: 1, color: '#374151' }];
 
   return (
     <div className="flex flex-col h-full overflow-hidden">
@@ -449,7 +485,7 @@ ${statisticsData.map((d) => `${d.date}: 总计${d.count}次 (一级${d.level1} �
             </div>
             <div className="p-4 h-72">
               <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={mockTypeStats} layout="vertical">
+                <BarChart data={typeStats.length > 0 ? typeStats : [{ type: '暂无数据', count: 0 }]} layout="vertical">
                   <CartesianGrid strokeDasharray="3 3" stroke="rgba(0, 212, 255, 0.1)" />
                   <XAxis
                     type="number"
@@ -488,7 +524,7 @@ ${statisticsData.map((d) => `${d.date}: 总计${d.count}次 (一级${d.level1} �
             </div>
             <div className="p-4 h-72">
               <ResponsiveContainer width="100%" height="100%">
-                <LineChart data={mockTimeSlotStats}>
+                <LineChart data={timeSlotStats}>
                   <CartesianGrid strokeDasharray="3 3" stroke="rgba(0, 212, 255, 0.1)" />
                   <XAxis
                     dataKey="slot"
