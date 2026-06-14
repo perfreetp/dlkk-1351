@@ -6,7 +6,6 @@ import {
   YAxis,
   CartesianGrid,
   Tooltip,
-  Legend,
   ResponsiveContainer,
   PieChart,
   Pie,
@@ -29,31 +28,56 @@ import {
   MapPin,
 } from 'lucide-react';
 import {
-  mockStatistics,
   mockAreaStats,
   mockTypeStats,
   mockTimeSlotStats,
   alertStatusLabels,
 } from '@/data/mockData';
 import { useAppStore } from '@/store';
+import { generateStatsForRange, isSameDay } from '@/lib/utils';
 
 type TimeRange = 'day' | 'week' | 'month';
 
 export default function Statistics() {
-  const { alerts, targets, workOrders } = useAppStore();
+  const { alerts, workOrders } = useAppStore();
   const [timeRange, setTimeRange] = useState<TimeRange>('week');
   const [exporting, setExporting] = useState(false);
 
+  const statisticsData = useMemo(() => {
+    const days = timeRange === 'day' ? 1 : timeRange === 'week' ? 7 : 30;
+    return generateStatsForRange(days);
+  }, [timeRange]);
+
+  const filteredAlerts = useMemo(() => {
+    const now = new Date();
+    if (timeRange === 'day') {
+      return alerts.filter((a) => isSameDay(a.alertTime, now));
+    }
+    const days = timeRange === 'week' ? 7 : 30;
+    const cutoff = new Date(now.getTime() - 1000 * 60 * 60 * 24 * days);
+    return alerts.filter((a) => a.alertTime >= cutoff);
+  }, [alerts, timeRange]);
+
+  const filteredWorkOrders = useMemo(() => {
+    const now = new Date();
+    if (timeRange === 'day') {
+      return workOrders.filter((w) => isSameDay(w.createdAt, now));
+    }
+    const days = timeRange === 'week' ? 7 : 30;
+    const cutoff = new Date(now.getTime() - 1000 * 60 * 60 * 24 * days);
+    return workOrders.filter((w) => w.createdAt >= cutoff);
+  }, [workOrders, timeRange]);
+
   const alertStats = useMemo(() => {
-    const total = alerts.length;
-    const pending = alerts.filter((a) => a.status === 'pending').length;
-    const confirmed = alerts.filter((a) => a.status === 'confirmed').length;
-    const falsePositive = alerts.filter((a) => a.status === 'false_positive').length;
-    const escalated = alerts.filter((a) => a.status === 'escalated').length;
-    const resolved = alerts.filter((a) => a.status === 'resolved').length;
-    const level1 = alerts.filter((a) => a.level === 1).length;
-    const level2 = alerts.filter((a) => a.level === 2).length;
-    const level3 = alerts.filter((a) => a.level === 3).length;
+    const total = filteredAlerts.length;
+    const pending = filteredAlerts.filter((a) => a.status === 'pending').length;
+    const confirmed = filteredAlerts.filter((a) => a.status === 'confirmed').length;
+    const falsePositive = filteredAlerts.filter((a) => a.status === 'false_positive').length;
+    const escalated = filteredAlerts.filter((a) => a.status === 'escalated').length;
+    const resolved = filteredAlerts.filter((a) => a.status === 'resolved').length;
+    const level1 = filteredAlerts.filter((a) => a.level === 1).length;
+    const level2 = filteredAlerts.filter((a) => a.level === 2).length;
+    const level3 = filteredAlerts.filter((a) => a.level === 3).length;
 
     return {
       total,
@@ -66,17 +90,17 @@ export default function Statistics() {
       level2,
       level3,
     };
-  }, [alerts]);
+  }, [filteredAlerts]);
 
   const workOrderStats = useMemo(() => {
-    const total = workOrders.length;
-    const pending = workOrders.filter((w) => w.status === 'pending').length;
-    const processing = workOrders.filter((w) => w.status === 'processing').length;
-    const completed = workOrders.filter((w) => w.status === 'completed').length;
-    const closed = workOrders.filter((w) => w.status === 'closed').length;
+    const total = filteredWorkOrders.length;
+    const pending = filteredWorkOrders.filter((w) => w.status === 'pending').length;
+    const processing = filteredWorkOrders.filter((w) => w.status === 'processing').length;
+    const completed = filteredWorkOrders.filter((w) => w.status === 'completed').length;
+    const closed = filteredWorkOrders.filter((w) => w.status === 'closed').length;
 
     return { total, pending, processing, completed, closed };
-  }, [workOrders]);
+  }, [filteredWorkOrders]);
 
   const handleExportReport = () => {
     setExporting(true);
@@ -85,14 +109,15 @@ export default function Statistics() {
       const now = new Date();
       const reportDate = now.toLocaleDateString('zh-CN');
       const reportTime = now.toLocaleTimeString('zh-CN');
+      const rangeLabel = timeRange === 'day' ? '今日' : timeRange === 'week' ? '近7天' : '近30天';
 
       const reportContent = `
 无人机黑飞检测系统 - 值班报告
 =====================================
 生成时间: ${reportDate} ${reportTime}
-统计周期: ${timeRange === 'day' ? '今日' : timeRange === 'week' ? '近7天' : '近30天'}
+统计周期: ${rangeLabel}
 
-一、告警统计
+一、告警统计 (${rangeLabel})
 -------------------------------------
 总告警数: ${alertStats.total}
 一级告警: ${alertStats.level1}
@@ -105,7 +130,7 @@ export default function Statistics() {
 已升级: ${alertStats.escalated}
 已解决: ${alertStats.resolved}
 
-二、工单统计
+二、工单统计 (${rangeLabel})
 -------------------------------------
 总工单数: ${workOrderStats.total}
 待处置: ${workOrderStats.pending}
@@ -125,6 +150,10 @@ ${mockTypeStats.map((t) => `${t.type}: ${t.count}次`).join('\n')}
 -------------------------------------
 ${mockTimeSlotStats.map((t) => `${t.slot}: ${t.count}次`).join('\n')}
 
+六、告警趋势 (${rangeLabel})
+-------------------------------------
+${statisticsData.map((d) => `${d.date}: 总计${d.count}次 (一级${d.level1} 二级${d.level2} 三级${d.level3})`).join('\n')}
+
 =====================================
 报告生成完毕
       `.trim();
@@ -133,7 +162,7 @@ ${mockTimeSlotStats.map((t) => `${t.slot}: ${t.count}次`).join('\n')}
       const url = URL.createObjectURL(blob);
       const link = document.createElement('a');
       link.href = url;
-      link.download = `值班报告_${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}${String(now.getDate()).padStart(2, '0')}.txt`;
+      link.download = `值班报告_${rangeLabel}_${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}${String(now.getDate()).padStart(2, '0')}.txt`;
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
@@ -174,6 +203,9 @@ ${mockTimeSlotStats.map((t) => `${t.slot}: ${t.count}次`).join('\n')}
             统计报表
           </h2>
           <span className="text-sm text-gray-400">数据可视化分析</span>
+          <span className="badge badge-info">
+            {timeRange === 'day' ? '今日数据' : timeRange === 'week' ? '近7天数据' : '近30天数据'}
+          </span>
         </div>
 
         <div className="flex items-center gap-4">
@@ -270,7 +302,7 @@ ${mockTimeSlotStats.map((t) => `${t.slot}: ${t.count}次`).join('\n')}
               {alertStats.resolved + workOrderStats.completed}
             </div>
             <div className="mt-2 text-xs text-gray-400">
-              误报率 {((alertStats.falsePositive / alertStats.total) * 100).toFixed(1)}%
+              误报率 {alertStats.total > 0 ? ((alertStats.falsePositive / alertStats.total) * 100).toFixed(1) : '0.0'}%
             </div>
           </div>
         </div>
@@ -280,7 +312,7 @@ ${mockTimeSlotStats.map((t) => `${t.slot}: ${t.count}次`).join('\n')}
             <div className="card-header">
               <h3 className="card-title flex items-center gap-2">
                 <TrendingUp className="w-4 h-4" />
-                告警趋势
+                告警趋势 ({timeRange === 'day' ? '今日' : timeRange === 'week' ? '近7天' : '近30天'})
               </h3>
               <div className="flex gap-4 text-xs">
                 <span className="flex items-center gap-1">
@@ -299,7 +331,7 @@ ${mockTimeSlotStats.map((t) => `${t.slot}: ${t.count}次`).join('\n')}
             </div>
             <div className="p-4 h-72">
               <ResponsiveContainer width="100%" height="100%">
-                <AreaChart data={mockStatistics}>
+                <AreaChart data={statisticsData}>
                   <defs>
                     <linearGradient id="colorLevel1" x1="0" y1="0" x2="0" y2="1">
                       <stop offset="5%" stopColor="#ff3d3d" stopOpacity={0.3} />
@@ -491,7 +523,7 @@ ${mockTimeSlotStats.map((t) => `${t.slot}: ${t.count}次`).join('\n')}
           <div className="card-header">
             <h3 className="card-title flex items-center gap-2">
               <FileText className="w-4 h-4" />
-              告警处置统计
+              告警处置统计 ({timeRange === 'day' ? '今日' : timeRange === 'week' ? '近7天' : '近30天'})
             </h3>
           </div>
           <div className="p-4">
@@ -502,7 +534,7 @@ ${mockTimeSlotStats.map((t) => `${t.slot}: ${t.count}次`).join('\n')}
                               key === 'false_positive' ? alertStats.falsePositive :
                               key === 'escalated' ? alertStats.escalated :
                               alertStats.resolved;
-                const percentage = ((count / alertStats.total) * 100).toFixed(1);
+                const percentage = alertStats.total > 0 ? ((count / alertStats.total) * 100).toFixed(1) : '0.0';
 
                 return (
                   <div key={key} className="text-center">

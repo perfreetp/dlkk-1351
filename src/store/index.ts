@@ -1,6 +1,15 @@
 import { create } from 'zustand';
 import type { Target, Alert, Fence, Device, WorkOrder, AlertStatus, WorkOrderStatus } from '@/types';
 import { mockTargets, mockAlerts, mockFences, mockDevices, mockWorkOrders } from '@/data/mockData';
+import { serializeState, deserializeState } from '@/lib/utils';
+
+const STORAGE_KEY = 'drone-detection-state';
+
+interface PersistableState {
+  alerts: Alert[];
+  fences: Fence[];
+  workOrders: WorkOrder[];
+}
 
 interface AppState {
   targets: Target[];
@@ -29,69 +38,118 @@ interface AppState {
   updateWorkOrder: (workOrderId: string, updates: Partial<WorkOrder>) => void;
   updateTargetPosition: () => void;
   updateCurrentTime: () => void;
+  resetAllData: () => void;
 }
+
+function loadPersistedState(): Partial<PersistableState> {
+  try {
+    const saved = localStorage.getItem(STORAGE_KEY);
+    if (!saved) return {};
+    const parsed = JSON.parse(saved);
+    return deserializeState(parsed);
+  } catch (e) {
+    console.warn('Failed to load persisted state:', e);
+    return {};
+  }
+}
+
+function persistState(state: PersistableState) {
+  try {
+    const serialized = serializeState(state);
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(serialized));
+  } catch (e) {
+    console.warn('Failed to persist state:', e);
+  }
+}
+
+const persisted = loadPersistedState();
 
 export const useAppStore = create<AppState>((set, get) => ({
   targets: mockTargets,
-  alerts: mockAlerts,
-  fences: mockFences,
+  alerts: persisted.alerts ?? mockAlerts,
+  fences: persisted.fences ?? mockFences,
   devices: mockDevices,
-  workOrders: mockWorkOrders,
+  workOrders: persisted.workOrders ?? mockWorkOrders,
   selectedTarget: null,
   selectedAlert: null,
   selectedFence: null,
   currentTime: new Date(),
 
   setTargets: (targets) => set({ targets }),
-  setAlerts: (alerts) => set({ alerts }),
-  setFences: (fences) => set({ fences }),
+  setAlerts: (alerts) => {
+    set({ alerts });
+    persistState({ alerts, fences: get().fences, workOrders: get().workOrders });
+  },
+  setFences: (fences) => {
+    set({ fences });
+    persistState({ alerts: get().alerts, fences, workOrders: get().workOrders });
+  },
   setDevices: (devices) => set({ devices }),
-  setWorkOrders: (workOrders) => set({ workOrders }),
+  setWorkOrders: (workOrders) => {
+    set({ workOrders });
+    persistState({ alerts: get().alerts, fences: get().fences, workOrders });
+  },
   setSelectedTarget: (target) => set({ selectedTarget: target }),
   setSelectedAlert: (alert) => set({ selectedAlert: alert }),
   setSelectedFence: (fence) => set({ selectedFence: fence }),
 
   updateAlertStatus: (alertId, status) =>
-    set((state) => ({
-      alerts: state.alerts.map((a) => (a.id === alertId ? { ...a, status } : a)),
-    })),
+    set((state) => {
+      const alerts = state.alerts.map((a) => (a.id === alertId ? { ...a, status } : a));
+      persistState({ alerts, fences: state.fences, workOrders: state.workOrders });
+      return { alerts };
+    }),
 
   addFence: (fence) =>
-    set((state) => ({
-      fences: [...state.fences, fence],
-    })),
+    set((state) => {
+      const fences = [...state.fences, fence];
+      persistState({ alerts: state.alerts, fences, workOrders: state.workOrders });
+      return { fences };
+    }),
 
   updateFence: (fence) =>
-    set((state) => ({
-      fences: state.fences.map((f) => (f.id === fence.id ? fence : f)),
-    })),
+    set((state) => {
+      const fences = state.fences.map((f) => (f.id === fence.id ? fence : f));
+      persistState({ alerts: state.alerts, fences, workOrders: state.workOrders });
+      return { fences };
+    }),
 
   deleteFence: (fenceId) =>
-    set((state) => ({
-      fences: state.fences.filter((f) => f.id !== fenceId),
-      selectedFence: state.selectedFence?.id === fenceId ? null : state.selectedFence,
-    })),
+    set((state) => {
+      const fences = state.fences.filter((f) => f.id !== fenceId);
+      persistState({ alerts: state.alerts, fences, workOrders: state.workOrders });
+      return {
+        fences,
+        selectedFence: state.selectedFence?.id === fenceId ? null : state.selectedFence,
+      };
+    }),
 
   addWorkOrder: (workOrder) =>
-    set((state) => ({
-      workOrders: [...state.workOrders, workOrder],
-    })),
+    set((state) => {
+      const workOrders = [...state.workOrders, workOrder];
+      persistState({ alerts: state.alerts, fences: state.fences, workOrders });
+      return { workOrders };
+    }),
 
   updateWorkOrderStatus: (workOrderId, status) =>
-    set((state) => ({
-      workOrders: state.workOrders.map((w) =>
+    set((state) => {
+      const workOrders = state.workOrders.map((w) =>
         w.id === workOrderId
           ? { ...w, status, closedAt: status === 'completed' || status === 'closed' ? new Date() : undefined }
           : w
-      ),
-    })),
+      );
+      persistState({ alerts: state.alerts, fences: state.fences, workOrders });
+      return { workOrders };
+    }),
 
   updateWorkOrder: (workOrderId, updates) =>
-    set((state) => ({
-      workOrders: state.workOrders.map((w) =>
+    set((state) => {
+      const workOrders = state.workOrders.map((w) =>
         w.id === workOrderId ? { ...w, ...updates } : w
-      ),
-    })),
+      );
+      persistState({ alerts: state.alerts, fences: state.fences, workOrders });
+      return { workOrders };
+    }),
 
   updateTargetPosition: () => {
     const { targets } = get();
@@ -101,7 +159,7 @@ export const useAppStore = create<AppState>((set, get) => ({
       const newLat = target.trajectory[target.trajectory.length - 1].lat + Math.sin(rad) * speedFactor;
       const newLng = target.trajectory[target.trajectory.length - 1].lng + Math.cos(rad) * speedFactor;
       const newAltitude = target.altitude + (Math.random() - 0.5) * 2;
-      
+
       const newPoint = {
         lat: newLat,
         lng: newLng,
@@ -117,7 +175,7 @@ export const useAppStore = create<AppState>((set, get) => ({
       return {
         ...target,
         altitude: newPoint.altitude,
-        speed: target.speed + (Math.random() - 0.5) * 0.5,
+        speed: Math.max(1, target.speed + (Math.random() - 0.5) * 0.5),
         lastSeen: new Date(),
         trajectory: newTrajectory,
       };
@@ -126,4 +184,13 @@ export const useAppStore = create<AppState>((set, get) => ({
   },
 
   updateCurrentTime: () => set({ currentTime: new Date() }),
+
+  resetAllData: () => {
+    localStorage.removeItem(STORAGE_KEY);
+    set({
+      alerts: mockAlerts,
+      fences: mockFences,
+      workOrders: mockWorkOrders,
+    });
+  },
 }));

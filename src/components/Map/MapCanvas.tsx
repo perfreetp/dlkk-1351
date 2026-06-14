@@ -14,6 +14,7 @@ interface MapCanvasProps {
   onDrawComplete?: (coordinates: { lat: number; lng: number }[]) => void;
   drawingPoints?: { lat: number; lng: number }[];
   onDrawingPointAdd?: (point: { lat: number; lng: number }) => void;
+  playbackPointIndex?: Record<string, number>;
 }
 
 const MAP_CENTER = { lat: 39.906, lng: 116.4085 };
@@ -32,6 +33,7 @@ export default function MapCanvas({
   onDrawComplete,
   drawingPoints = [],
   onDrawingPointAdd,
+  playbackPointIndex,
 }: MapCanvasProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const animationRef = useRef<number>(0);
@@ -195,7 +197,11 @@ export default function MapCanvas({
   const drawTargets = useCallback((ctx: CanvasRenderingContext2D, width: number, height: number, time: number) => {
     targets.forEach((target) => {
       const isSelected = target.id === selectedTargetId;
-      const currentPos = target.trajectory[target.trajectory.length - 1];
+      const playbackIndex = playbackPointIndex?.[target.id];
+      const usePlayback = playbackIndex !== undefined && playbackIndex >= 0 && playbackIndex < target.trajectory.length;
+      const displayIndex = usePlayback ? playbackIndex : target.trajectory.length - 1;
+      const currentPos = target.trajectory[displayIndex];
+      const displayTrajectory = usePlayback ? target.trajectory.slice(0, displayIndex + 1) : target.trajectory;
       
       ctx.save();
       
@@ -208,17 +214,17 @@ export default function MapCanvas({
       ctx.lineCap = 'round';
       ctx.lineJoin = 'round';
       ctx.beginPath();
-      target.trajectory.forEach((point, i) => {
+      displayTrajectory.forEach((point, i) => {
         const { x, y } = latLngToPixel(point.lat, point.lng, width, height);
         if (i === 0) ctx.moveTo(x, y);
         else ctx.lineTo(x, y);
       });
       ctx.stroke();
       
-      target.trajectory.forEach((point, i) => {
+      displayTrajectory.forEach((point, i) => {
         if (i % 5 === 0) {
           const { x, y } = latLngToPixel(point.lat, point.lng, width, height);
-          const alpha = (i / target.trajectory.length) * 0.5 + 0.2;
+          const alpha = (i / displayTrajectory.length) * 0.5 + 0.2;
           ctx.fillStyle = `rgba(255, 61, 61, ${alpha})`;
           ctx.beginPath();
           ctx.arc(x, y, 2, 0, Math.PI * 2);
@@ -227,22 +233,34 @@ export default function MapCanvas({
       });
       
       const { x, y } = latLngToPixel(currentPos.lat, currentPos.lng, width, height);
-      const pulseSize = 8 + Math.sin(time * 0.005) * 3;
+      const pulseSize = usePlayback ? 8 : 8 + Math.sin(time * 0.005) * 3;
       
       if (isSelected) {
         ctx.shadowColor = '#ff3d3d';
         ctx.shadowBlur = 20;
       }
       
-      ctx.fillStyle = 'rgba(255, 61, 61, 0.3)';
-      ctx.beginPath();
-      ctx.arc(x, y, pulseSize + 5, 0, Math.PI * 2);
-      ctx.fill();
-      
-      ctx.fillStyle = '#ff3d3d';
-      ctx.beginPath();
-      ctx.arc(x, y, pulseSize, 0, Math.PI * 2);
-      ctx.fill();
+      if (usePlayback) {
+        ctx.fillStyle = 'rgba(0, 212, 255, 0.3)';
+        ctx.beginPath();
+        ctx.arc(x, y, pulseSize + 5, 0, Math.PI * 2);
+        ctx.fill();
+        
+        ctx.fillStyle = '#00d4ff';
+        ctx.beginPath();
+        ctx.arc(x, y, pulseSize, 0, Math.PI * 2);
+        ctx.fill();
+      } else {
+        ctx.fillStyle = 'rgba(255, 61, 61, 0.3)';
+        ctx.beginPath();
+        ctx.arc(x, y, pulseSize + 5, 0, Math.PI * 2);
+        ctx.fill();
+        
+        ctx.fillStyle = '#ff3d3d';
+        ctx.beginPath();
+        ctx.arc(x, y, pulseSize, 0, Math.PI * 2);
+        ctx.fill();
+      }
       
       ctx.fillStyle = '#fff';
       ctx.beginPath();
@@ -263,7 +281,7 @@ export default function MapCanvas({
       
       ctx.restore();
     });
-  }, [targets, selectedTargetId, latLngToPixel]);
+  }, [targets, selectedTargetId, latLngToPixel, playbackPointIndex]);
 
   const drawDrawingPoints = useCallback((ctx: CanvasRenderingContext2D, width: number, height: number) => {
     if (drawingPoints.length === 0) return;
@@ -347,7 +365,7 @@ export default function MapCanvas({
     drawScanLine(ctx, width, height, time);
     
     animationRef.current = requestAnimationFrame(render);
-  }, [drawGrid, drawParkBoundary, drawFences, drawDevices, showCoverage, drawTargets, drawMode, drawDrawingPoints, drawScanLine]);
+  }, [drawGrid, drawParkBoundary, drawFences, drawDevices, showCoverage, drawTargets, drawMode, drawDrawingPoints, drawScanLine, playbackPointIndex]);
 
   useEffect(() => {
     const canvas = canvasRef.current;
